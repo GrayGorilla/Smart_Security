@@ -24,6 +24,7 @@
 #include "scheduler.h"
 #include "timer.h"
 #include "keypad.h"
+#include "pwm.h"
 
 char* message;
 unsigned char position;
@@ -32,7 +33,7 @@ unsigned char position;
 /* ----------------------- STATE MACHINES ----------------------- */
 
 enum lockStates { Start, Reset, Locked, Unlocked, Armed, SoundAlarm };
-int place_holder(){};
+int place_holder(){ return 0; };
 
 
 enum keyPadStates{KP_Start, Button};
@@ -112,8 +113,9 @@ int LCD_tick(int state) {
 
 /* ----------------------- MAIN ----------------------- */
 
-int main(void) {
+int dmain(void) {
     
+    DDRA = 0x00; PORTA = 0x04;  // PWM
     DDRC = 0xF0; PORTC = 0x0F;  // Keypad input
     
     unsigned char i = 0;
@@ -143,8 +145,12 @@ int main(void) {
 
 
 
-int main1(void)
+/* ----------------------- TEST ----------------------- */
+
+int main(void)
 {
+    DDRB = 0x40; PORTB = 0x00;  // PWM
+
     nokia_lcd_init();
     nokia_lcd_clear();
     nokia_lcd_write_string("IT'S WORKING!", 1);
@@ -158,7 +164,44 @@ int main1(void)
     nokia_lcd_set_pixel(5, 0, HIDE);
     */
     nokia_lcd_render();
+    
+    PWM_on();
+    
+    nokia_lcd_set_cursor(0, 15);
+    nokia_lcd_write_string("Zero", 3);
+    nokia_lcd_render();
+    
+    /*
+    200: 0 degrees
+    325: 90 degrees
+    800: 180 degrees
+    */
+    
+    short value = 200;
 
+    for(short i = 0; i < 13; i++) {
+        
+        set_PWM(value);  
+        char s[4];
+        itoa(value, s, 10);
+            
+        nokia_lcd_clear();
+        nokia_lcd_set_cursor(0, 15);
+        nokia_lcd_write_string(s, 3);
+        nokia_lcd_render();
+        
+        if (value <= 200) value = 325;
+        else value = 200;
+            
+        _delay_ms(20000);       
+    }
+    
+    nokia_lcd_clear();
+    nokia_lcd_set_cursor(0, 15);
+    nokia_lcd_write_string("Done.", 3);
+    nokia_lcd_render();
+
+        
     while (1) {
         _delay_ms(1000);
     }
