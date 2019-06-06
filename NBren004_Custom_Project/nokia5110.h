@@ -20,17 +20,17 @@
 /*
  * LCD's port
  */
-#define PORT_LCD PORTA
-#define DDR_LCD DDRA
+#define PORT_LCD PORTC
+#define DDR_LCD DDRC
 
 /*
  * LCD's pins
  */
-#define LCD_RST PA0
-#define LCD_SCE PA1
-#define LCD_DC PA2
-#define LCD_DIN PA3
-#define LCD_CLK PA4
+#define LCD_RST PC5
+#define LCD_SCE PC4
+#define LCD_DC PC3
+#define LCD_DIN PC2
+#define LCD_CLK PC1
 
 #define LCD_CONTRAST 0x40
 

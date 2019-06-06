@@ -15,6 +15,7 @@
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <avr/eeprom.h>
 #include <util/delay.h>
 #include <stdio.h>
 #include <string.h>
@@ -25,7 +26,7 @@
 #include "keypad.h"
 #include "pwm.h"
 #include "queue.h"
-
+#include "USART.h"
 
 
 char* message;
@@ -334,7 +335,7 @@ int mainz(void)
 #define PIR_Input		PINC
 
 
-int main(void)
+int mainii(void)
 {
     DDRC = 0x00;	PIR_Input = 0xFF;   /* Set the PIR port as input port */
     DDRB = 0x41;	LED_OUTPUT = 0x00;  /* Set the LED port as output port */   // and PWM
@@ -349,35 +350,72 @@ int main(void)
         
         
     PWM_on();
-
-    
     nokia_lcd_init();
-
+    
+    unsigned char count = 0;
+    char s_count[3];
+    if (!eeprom_read_byte((uint8_t*) 0)) eeprom_write_byte((uint8_t*) 0, count);
+    
+    nokia_lcd_clear();
+    nokia_lcd_write_string("Wait..", 2);
+    nokia_lcd_render();
+    _delay_ms(4000);
 
     while(1)
     {
-        //LED_OUTPUT = ~PIR_Input & 0x01;
-        nokia_lcd_clear();
+        count = eeprom_read_byte((uint8_t*) 0);
+        itoa(count, s_count, 10);
 
         if (PIR_Input & 0x01) {
             LED_OUTPUT = 0x01;
             nokia_lcd_clear();
             nokia_lcd_write_string("Motion!", 2);
+            nokia_lcd_set_cursor(0, 20);
+            nokia_lcd_write_string(s_count, 2);
             nokia_lcd_render();
+            nokia_lcd_set_cursor(0, 0);
             OCR1A = 175;	/* Set servo shaft at 0° position */
             while (PIR_Input & 0x01) {
                 set_PWM(174.61);
                 _delay_ms(500);
                 set_PWM(0);
                 _delay_ms(500);
-            }            
+            }
+            count += 1;
+            eeprom_write_byte((uint8_t*) 0, count);
         }            
         else { 
             LED_OUTPUT = 0x00;
+            nokia_lcd_clear();
             nokia_lcd_write_string("Clear", 2);
             nokia_lcd_render();
             OCR1A = 65;	/* Set servo shaft at -90° position */
             set_PWM(0);
         }            
+    }
+}
+
+
+int main() {
+    
+    DDRB = 0x01; PORTB = 0x00;
+    USART_Init(BAUD_RATE);
+    
+    while (1) {
+        if (USART_HasReceived()) {
+            switch (USART_Receive()) {
+                case '0':
+                    PORTB = 0x00;
+                    USART_Transmit('o');
+                    break;
+                case '1':
+                    PORTB = 0x01;
+                    USART_Transmit('i');
+                    break;
+                default:
+                    USART_Transmit('N');
+                    break;
+            }
+        }
     }
 }
