@@ -5,35 +5,97 @@
  * Author : Nathan Brennan
  */ 
 
-#include <avr/io.h>
-#include <util/delay.h>
-#include "nokia5110.h"
-
+#define F_CPU 8000000UL		/* Define CPU Frequency e.g. here its 8MHz */
 #define HIDE 0
 #define SHOW 1
+#define TASKS_SIZE 2
+#define TASKS_PERIOD 100
 
 
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <util/delay.h>
 #include <stdio.h>
 #include <string.h>
-#define TASKS_SIZE 2
-#define TASKS_PERIOD 100
+#include "nokia5110.h"
 #include "bit.h"
 #include "scheduler.h"
 #include "timer.h"
 #include "keypad.h"
 #include "pwm.h"
+#include "queue.h"
+
+
 
 char* message;
 unsigned char position;
+
+unsigned char b_lock, b_reset, b_arm, sensor, keyEnable;
+unsigned char* password;
+Queue* keyInput;
 
 
 /* ----------------------- STATE MACHINES ----------------------- */
 
 enum lockStates { Start, Reset, Locked, Unlocked, Armed, SoundAlarm };
-int place_holder(){ return 0; };
+int place_holder(int state) { 
+    // Transitions
+    switch (state) {
+        case Start:
+            state = Reset;
+            QueueClear(keyInput);
+            keyEnable = 1;
+            break;
+        case Reset:
+            if (b_lock && QueueFull(*keyInput)) {
+                state = Locked;
+                password = keyInput->buf;
+                QueueClear(keyInput);
+            }
+            /*
+            else if (b_arm) {
+                state = Armed;
+                password = keyInput.buf;
+                QueueClear(keyInput);
+                keyEnable = 0;
+            }*/
+            else {
+                state = Reset;
+            }
+            break;
+        case Locked:
+            if (keyInput->buf == password) {
+                state = Unlocked;
+                keyEnable = 0;
+            }
+            else {
+                state = Locked;
+            }
+            break;
+        case Armed:
+            break;
+        case SoundAlarm:
+            break;
+        case Unlocked:
+            if (b_reset) {
+                state = Reset;
+                QueueClear(keyInput);
+                keyEnable = 1;
+            }
+            else if (b_lock) {
+                state = Locked;
+                QueueClear(keyInput);
+                keyEnable = 1;
+            }
+            else if (b_arm) {
+                state = Armed;
+                QueueClear(keyInput);
+                keyEnable = 1;
+            }
+    }
+    return state; 
+};
 
 
 enum keyPadStates{KP_Start, Button};
@@ -118,6 +180,8 @@ int dmain(void) {
     DDRA = 0x00; PORTA = 0x04;  // PWM
     DDRC = 0xF0; PORTC = 0x0F;  // Keypad input
     
+    QueueInit(keyInput);
+    
     unsigned char i = 0;
     tasks[i].state = KP_Start;
     tasks[i].period = TASKS_PERIOD;
@@ -147,7 +211,7 @@ int dmain(void) {
 
 /* ----------------------- TEST ----------------------- */
 
-int main(void)
+int maindd(void)
 {
     DDRB = 0x40; PORTB = 0x00;  // PWM
 
@@ -204,5 +268,116 @@ int main(void)
         
     while (1) {
         _delay_ms(1000);
+    }
+}
+
+int mainz(void)
+{
+    DDRD |= (1<<PD5);	/* Make OC1A pin as output */
+    TCNT1 = 0;		/* Set timer1 count zero */
+    ICR1 = 2499;		/* Set TOP count for timer1 in ICR1 register */
+
+    /* Set Fast PWM, TOP in ICR1, Clear OC1A on compare match, clk/64 */
+    TCCR1A = (1<<WGM11)|(1<<COM1A1);
+    TCCR1B = (1<<WGM12)|(1<<WGM13)|(1<<CS10)|(1<<CS11);
+    
+    
+    DDRB = 0x40; PORTB = 0x00;  // PWM
+    PWM_on();
+    nokia_lcd_init();
+    
+    
+    while(1)
+    {
+        OCR1A = 65;	/* Set servo shaft at -90° position */
+        _delay_ms(1500);
+        OCR1A = 175;	/* Set servo shaft at 0° position */
+        _delay_ms(1500);
+        OCR1A = 300;	/* Set servo at +90° position */
+        _delay_ms(1000);
+            
+
+        
+        set_PWM(174.61);
+        nokia_lcd_clear();
+        nokia_lcd_write_string("On", 3);
+        nokia_lcd_render();
+        _delay_ms(500);
+        set_PWM(0);
+        nokia_lcd_clear();
+        nokia_lcd_write_string("Off", 3);
+        nokia_lcd_render();
+        _delay_ms(500);        
+        set_PWM(174.61);
+        nokia_lcd_clear();
+        nokia_lcd_write_string("On", 3);
+        nokia_lcd_render();
+        _delay_ms(500);
+        set_PWM(0);
+        nokia_lcd_clear();
+        nokia_lcd_write_string("Off", 3);
+        nokia_lcd_render();
+        _delay_ms(500);
+        set_PWM(174.61);
+        nokia_lcd_clear();
+        nokia_lcd_write_string("On", 3);
+        nokia_lcd_render();
+        _delay_ms(500);
+        set_PWM(0);
+        nokia_lcd_clear();
+        nokia_lcd_write_string("Off", 3);
+        nokia_lcd_render();
+    }
+}
+
+#define LED_OUTPUT		PORTB
+#define PIR_Input		PINC
+
+
+int main(void)
+{
+    DDRC = 0x00;	PIR_Input = 0xFF;   /* Set the PIR port as input port */
+    DDRB = 0x41;	LED_OUTPUT = 0x00;  /* Set the LED port as output port */   // and PWM
+    
+    DDRD |= (1<<PD5);	/* Make OC1A pin as output */
+    TCNT1 = 0;		/* Set timer1 count zero */
+    ICR1 = 2499;		/* Set TOP count for timer1 in ICR1 register */
+
+    /* Set Fast PWM, TOP in ICR1, Clear OC1A on compare match, clk/64 */
+    TCCR1A = (1<<WGM11)|(1<<COM1A1);
+    TCCR1B = (1<<WGM12)|(1<<WGM13)|(1<<CS10)|(1<<CS11);
+        
+        
+    PWM_on();
+
+    
+    nokia_lcd_init();
+
+
+    while(1)
+    {
+        //LED_OUTPUT = ~PIR_Input & 0x01;
+        nokia_lcd_clear();
+
+        if (PIR_Input & 0x01) {
+            LED_OUTPUT = 0x01;
+            nokia_lcd_clear();
+            nokia_lcd_write_string("Motion!", 2);
+            nokia_lcd_render();
+            OCR1A = 175;	/* Set servo shaft at 0° position */
+            while (PIR_Input & 0x01) {
+                set_PWM(174.61);
+                _delay_ms(500);
+                set_PWM(0);
+                _delay_ms(500);
+            }            
+        }            
+        else { 
+            LED_OUTPUT = 0x00;
+            nokia_lcd_write_string("Clear", 2);
+            nokia_lcd_render();
+            OCR1A = 65;	/* Set servo shaft at -90° position */
+            set_PWM(0);
+        }            
     }
 }
