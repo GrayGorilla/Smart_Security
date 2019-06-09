@@ -37,7 +37,7 @@ void resetEEPROM();
 char* message;
 unsigned char position;
 
-unsigned char keyEnable, b_arm, b_reset, b_lock, p_sensor, u_bluetooth, l_reset, l_unlocked, l_locked, l_armed, l_soundAlarm;
+unsigned char finishedPass, b_arm, b_reset, b_lock, p_sensor, u_bluetooth, l_reset, l_unlocked, l_locked, l_armed, l_soundAlarm;
 unsigned char password[4];
 Queue* keyInput;
 
@@ -160,6 +160,7 @@ int lock_tick(int state) {
             l_locked = 0;
             l_armed = 0;
             l_soundAlarm = 0;
+            finishedPass = 0;
             savedState = eeprom_read_byte((uint8_t*) 0);
             if (savedState) {
                 state = savedState;
@@ -168,7 +169,12 @@ int lock_tick(int state) {
             }
             break;
         case L_Set:
-            state = L_Unlocked;
+            if (finishedPass) {
+                state = L_Unlocked;
+                finishedPass = 0;
+            } else {
+                /* PASSWORD LOGIC */
+            }                
             break;
         case L_Reset:
         case L_Unlocked:
@@ -359,7 +365,7 @@ int alarm_tick(int state) {
             if (savedState) {
                 state = savedState;
             } else {
-                state = S_Unlock;
+                state = A_Disable;
             }
             break;
         case A_Disable:
@@ -379,9 +385,10 @@ int alarm_tick(int state) {
         case A_Low:
             if (l_soundAlarm) {
                 state = A_High;
-            } else {
+                } else {
                 state = A_Disable;
             }
+            break;
         default:
             state = A_Start;
             break;
@@ -588,7 +595,7 @@ int main() {
     /* Initialize State Machines */
     unsigned char i = 0;
     tasks[i].state = B_Start;
-    tasks[i].period = 50;
+    tasks[i].period = 10;
     tasks[i].elapsedTime = tasks[i].period;
     tasks[i].TickFct = &button_tick;
     i++;
@@ -613,7 +620,7 @@ int main() {
     tasks[i].TickFct = &servo_tick;
     i++;
     tasks[i].state = A_Start;
-    tasks[i].period = 100;
+    tasks[i].period = 130;
     tasks[i].elapsedTime = tasks[i].period;
     tasks[i].TickFct = &alarm_tick;
     i++;
