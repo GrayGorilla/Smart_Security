@@ -33,14 +33,9 @@ void test_4();
 void itoa(int, char*, int);
 void resetEEPROM();
 
-
-char* message;
-unsigned char position;
-
-unsigned char finishedPass, b_arm, b_reset, b_lock, p_sensor, u_bluetooth, l_reset, l_unlocked, l_locked, l_armed, l_soundAlarm;
-unsigned char password[4];
+char s_count[3];
+unsigned char finishedPass, alarmCount, b_arm, b_reset, b_lock, p_sensor, u_bluetooth, l_reset, l_unlocked, l_locked, l_armed, l_soundAlarm;
 Queue* keyInput;
-
 
 /* ----------------------- STATE MACHINES ----------------------- */
 
@@ -160,7 +155,7 @@ int lock_tick(int state) {
             l_locked = 0;
             l_armed = 0;
             l_soundAlarm = 0;
-            finishedPass = 0;
+            finishedPass = 1;
             savedState = eeprom_read_byte((uint8_t*) 0);
             if (savedState) {
                 state = savedState;
@@ -187,8 +182,8 @@ int lock_tick(int state) {
                 } else {
                     state = L_Locked;
                 }             
-            } else if (b_reset) {       // Temporary; omitting L_Reset state
-            state = L_Unlocked;
+            } else if (b_reset) {
+                state = L_Unlocked;
             } else if (b_lock) {
                 state = L_Locked;
             } else if (b_arm) {
@@ -196,7 +191,7 @@ int lock_tick(int state) {
                     state = L_Armed;
                 } else {
                     nokia_lcd_clear();
-                    nokia_lcd_write_string("To arm, please disable override", 1);
+                    nokia_lcd_write_string("To arm, pleasedisable       override", 1);
                     nokia_lcd_render();
                     state = L_Locked;
                 }
@@ -243,68 +238,6 @@ int lock_tick(int state) {
         default:
             break;
     }
-    
-
-    // Transitions
-    /*
-    switch (state) {
-        case L_Start:
-            savedState = eeprom_read_byte((uint8_t*) 0);
-            if (savedState) {
-                state = savedState;
-            } else {
-                state = L_Reset;
-            }
-            break;
-            QueueClear(keyInput);
-            keyEnable = 1;
-            break;
-        case L_Reset:
-            if (b_lock && QueueFull(*keyInput)) {
-                state = L_Locked;
-                password = keyInput->buf;
-                QueueClear(keyInput);
-            }
-            else if (b_arm) {
-                state = L_Armed;
-                password = keyInput.buf;
-                QueueClear(keyInput);
-                keyEnable = 0;
-            }
-            else {
-                state = L_Reset;
-            }
-            break;
-        case L_Locked:
-            if (keyInput->buf == password) {
-                state = L_Unlocked;
-                keyEnable = 0;
-            }
-            else {
-                state = L_Locked;
-            }
-            break;
-        case L_Armed:
-            break;
-        case L_SoundAlarm:
-            break;
-        case L_Unlocked:
-            if (b_reset) {
-                state = L_Reset;
-                QueueClear(keyInput);
-                keyEnable = 1;
-            }
-            else if (b_lock) {
-                state = L_Locked;
-                QueueClear(keyInput);
-                keyEnable = 1;
-            }
-            else if (b_arm) {
-                state = L_Armed;
-                QueueClear(keyInput);
-                keyEnable = 1;
-            }
-    } */
     eeprom_write_byte((uint8_t*) 0, state);
     return state; 
 };
@@ -357,11 +290,17 @@ int servo_tick(int state) {
 
 enum AlarmStates { A_Start, A_Disable, A_High, A_Low };
 int alarm_tick(int state) {
-    unsigned char savedState;
+    unsigned char savedState, eepromInput;
     // Transitions
     switch (state) {
         case A_Start:
             savedState = eeprom_read_byte((uint8_t*) 2);
+            eepromInput = eeprom_read_byte((uint8_t*) 4);
+            if (eepromInput) {
+                alarmCount = eepromInput;
+            } else {
+                alarmCount = 0;
+            }                
             if (savedState) {
                 state = savedState;
             } else {
@@ -403,6 +342,7 @@ int alarm_tick(int state) {
         case A_High:
             set_PWM(174.61);        // Low C-note
             PORTD = PIND | 0x80;    // LED On
+            alarmCount++;
             break;
         default:
             break;
@@ -532,7 +472,7 @@ int nokia_tick(int state) {
         case N_Unlocked:
             if (stateHasChanged) {
                 nokia_lcd_clear();
-                nokia_lcd_write_string("Unlocked", 1);
+                nokia_lcd_write_string("Un-locked", 1);
                 nokia_lcd_render();
             }
             break;
@@ -555,14 +495,27 @@ int nokia_tick(int state) {
         case N_SoundAlarm:
             if (stateHasChanged) {
                 nokia_lcd_clear();
-                nokia_lcd_write_string(" !!!", 3);
+                nokia_lcd_write_string("  !!!", 2);
                 nokia_lcd_render();
             }
-            /* PUT STUFF HERE */
+            itoa(alarmCount, s_count, 10);
+            nokia_lcd_set_cursor(30, 20);
+            nokia_lcd_write_string(s_count, 2);
+            nokia_lcd_set_cursor(0, 0);
+            eeprom_write_byte((uint8_t*) 4, state);
             break;
         default:
             break;
     }
+    nokia_lcd_set_cursor(2, 40);
+    if (u_bluetooth) {
+        nokia_lcd_write_string("Override En. ", 1);
+    } else {
+        nokia_lcd_write_string("Alarm Enabled", 1);
+    }
+    nokia_lcd_render();
+    nokia_lcd_set_cursor(0, 0);
+    
     eeprom_write_byte((uint8_t*) 3, state);
     return state;
 }
@@ -572,13 +525,10 @@ int nokia_tick(int state) {
 
 int main() {
     
-    resetEEPROM();
-    
-    //test_3();
+    //resetEEPROM();
     
     /* Initialize Ports */
-    DDRA = 0x01;    PORTA = 0x00;       // Testing LED (temp)
-    //DDRA = 0xF0;    PORTA = 0x0F;       /* Keypad */
+    DDRA = 0x01;    PORTA = 0x00;       // Testing LED
     DDRB = 0x40;    PORTB = 0x07;       /* PWM & Buttons */
     DDRC = 0x3E;	PORTC = 0x01;       /* Nokia LCD Screen & PIR sensor */
     DDRD = 0x80;    PORTD = 0x00;       /* LED & Servo */
@@ -625,7 +575,7 @@ int main() {
     tasks[i].TickFct = &alarm_tick;
     i++;
     tasks[i].state = N_Start;
-    tasks[i].period = 150;
+    tasks[i].period = 130;
     tasks[i].elapsedTime = tasks[i].period;
     tasks[i].TickFct = &nokia_tick;
     i++;
@@ -834,7 +784,7 @@ void test_3(void)
             nokia_lcd_set_cursor(20, 40);
             if (bluetoothInput) {
                 nokia_lcd_write_string("Disabled", 1);
-                } else {
+            } else {
                 nokia_lcd_write_string("Armed", 1);
             }
             nokia_lcd_render();

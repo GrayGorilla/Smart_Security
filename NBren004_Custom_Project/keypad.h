@@ -11,8 +11,8 @@ PC2 3   7 | 8 | 9 | C
 PC3 4   * | 0 | # | D
 */
 
-#define THE_PORT PORTC
-#define THE_PIN PINC
+#define THE_PORT PORTA
+#define THE_PIN PINA
 // Must initialize DDR in main.c
 
 unsigned char GetKeypadKey() {
