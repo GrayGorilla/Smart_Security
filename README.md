@@ -10,8 +10,6 @@ https://youtu.be/FPPx_EXGCfg
 ## Project Report
 [project_report.pdf](https://drive.google.com/file/d/1knC68ZdjXuRX73LYcpENPn6HeRKGEugR/view?usp=sharing)
 
-<br />
-
 ## Images
 ### System Hardware
 ![IMG_20190609_234908](https://user-images.githubusercontent.com/43688010/167054124-d54c36e4-d620-4b76-a1d5-baebca48a36e.jpg)
